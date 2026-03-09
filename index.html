@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>FuelTrack</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="camera-container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div id="status-bar">
+    <span id="status-text">Press Start to begin tracking</span>
+  </div>
+
+  <div id="controls">
+    <button id="btn-track" class="btn btn-primary">Start Tracking</button>
+    <button id="btn-reset" class="btn btn-secondary">Reset</button>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

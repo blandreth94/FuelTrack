@@ -1,0 +1,169 @@
+/**
+ * main.js — FuelTrack app entry point.
+ *
+ * Handles camera initialisation, the detection/tracking/rendering loop,
+ * and UI button events.
+ */
+
+import { createDetector } from './detector.js';
+import { BallTracker } from './tracker.js';
+import { render } from './renderer.js';
+
+// ── DOM References ────────────────────────────────────────────────────────────
+const video      = document.getElementById('video');
+const canvas     = document.getElementById('overlay');
+const btnTrack   = document.getElementById('btn-track');
+const btnReset   = document.getElementById('btn-reset');
+const statusText = document.getElementById('status-text');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const detector = createDetector('color');
+const tracker  = new BallTracker();
+
+let tracking    = false;
+let rafId       = null;
+let lastFrameTs = 0;
+
+/** Offscreen canvas used to read pixel data from the video stream. */
+const offscreen    = document.createElement('canvas');
+const offscreenCtx = offscreen.getContext('2d', { willReadFrequently: true });
+
+// Throttle to ~30 fps to preserve battery / thermal headroom on iPhone.
+const TARGET_INTERVAL_MS = 1000 / 30;
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+
+async function startCamera() {
+  statusText.textContent = 'Requesting camera…';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await new Promise(resolve => {
+      video.addEventListener('loadedmetadata', resolve, { once: true });
+    });
+    statusText.textContent = 'Press Start to begin tracking';
+    btnTrack.disabled = false;
+  } catch (err) {
+    showError(err);
+  }
+}
+
+// ── Detection / Render Loop ───────────────────────────────────────────────────
+
+function loop(ts) {
+  rafId = requestAnimationFrame(loop);
+
+  const elapsed = ts - lastFrameTs;
+  if (elapsed < TARGET_INTERVAL_MS) return; // throttle
+  lastFrameTs = ts - (elapsed % TARGET_INTERVAL_MS);
+
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+
+  if (!vw || !vh) return; // video not ready yet
+
+  // Resize offscreen canvas to match the video stream (not the display)
+  if (offscreen.width !== vw || offscreen.height !== vh) {
+    offscreen.width  = vw;
+    offscreen.height = vh;
+  }
+
+  let detections = [];
+
+  if (tracking) {
+    offscreenCtx.drawImage(video, 0, 0, vw, vh);
+    const imageData = offscreenCtx.getImageData(0, 0, vw, vh);
+    detections = detector.detect(imageData, vw, vh);
+    tracker.update(detections, ts);
+    updateStatus();
+  }
+
+  render(
+    canvas,
+    video,
+    tracker.drawablePaths,
+    tracker.activeDetectionPoints,
+    vw,
+    vh,
+  );
+}
+
+function startLoop() {
+  if (rafId !== null) return;
+  rafId = requestAnimationFrame(loop);
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────────
+
+function updateStatus() {
+  const active = tracker.activeBallCount;
+  const total  = tracker.totalPathCount;
+  if (!tracking) {
+    statusText.textContent = total > 0
+      ? `Paused — ${total} arc${total !== 1 ? 's' : ''} recorded`
+      : 'Press Start to begin tracking';
+    return;
+  }
+  if (active === 0) {
+    statusText.textContent = 'Tracking — no balls detected';
+  } else {
+    statusText.textContent = `Tracking ${active} ball${active !== 1 ? 's' : ''}` +
+      (total > active ? ` · ${total} total arcs` : '');
+  }
+}
+
+btnTrack.addEventListener('click', () => {
+  tracking = !tracking;
+  if (tracking) {
+    btnTrack.textContent = 'Stop Tracking';
+    btnTrack.classList.add('tracking');
+    statusText.textContent = 'Tracking — no balls detected';
+  } else {
+    btnTrack.textContent = 'Start Tracking';
+    btnTrack.classList.remove('tracking');
+    updateStatus();
+  }
+});
+
+btnReset.addEventListener('click', () => {
+  tracker.reset();
+  updateStatus();
+});
+
+// ── Error Handling ────────────────────────────────────────────────────────────
+
+function showError(err) {
+  console.error('FuelTrack error:', err);
+
+  let message = 'An unexpected error occurred.';
+  if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+    message = 'Camera access was denied. Please allow camera permissions in your browser settings and reload the page.';
+  } else if (err.name === 'NotFoundError') {
+    message = 'No camera was found on this device.';
+  } else if (err.name === 'NotReadableError') {
+    message = 'The camera is already in use by another application.';
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'error-overlay';
+  overlay.innerHTML = `<h2>Camera Unavailable</h2><p>${message}</p>`;
+  document.body.appendChild(overlay);
+
+  statusText.textContent = 'Camera unavailable';
+  btnTrack.disabled = true;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+btnTrack.disabled = true; // enabled after camera is ready
+
+startCamera().then(() => {
+  startLoop();
+});

@@ -1,0 +1,131 @@
+/**
+ * tracker.js — Multi-ball path tracking across video frames.
+ *
+ * Associates per-frame detections with existing paths using nearest-centroid
+ * matching. Inactive paths (no recent detection) retain their points so arcs
+ * persist on screen until reset() is called.
+ */
+
+const ARC_COLORS = [
+  '#FF3B30', // red
+  '#007AFF', // blue
+  '#34C759', // green
+  '#FF9500', // orange
+  '#AF52DE', // purple
+  '#FF2D55', // pink
+  '#5AC8FA', // light blue
+  '#FFCC00', // yellow (visible on dark backgrounds)
+];
+
+/** Max pixel distance to match a detection to an existing active path. */
+const MAX_MATCH_DISTANCE = 160;
+
+/** Frames without a detection before a path is marked inactive. */
+const INACTIVE_AFTER_FRAMES = 20;
+
+/** Minimum number of points a path needs before it's drawn as an arc. */
+export const MIN_POINTS_TO_DRAW = 2;
+
+let colorIndex = 0;
+function nextColor() {
+  const c = ARC_COLORS[colorIndex % ARC_COLORS.length];
+  colorIndex++;
+  return c;
+}
+
+function dist(ax, ay, bx, by) {
+  const dx = ax - bx;
+  const dy = ay - by;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * A single tracked ball path.
+ * @typedef {{ points: {x:number,y:number,t:number}[], color:string, active:boolean, framesSinceUpdate:number }} Path
+ */
+
+export class BallTracker {
+  constructor() {
+    /** @type {Path[]} */
+    this.paths = [];
+  }
+
+  /**
+   * Update paths with detections from the current frame.
+   *
+   * @param {Array<{cx:number, cy:number, radius:number, area:number}>} detections
+   * @param {number} timestamp - performance.now() or Date.now()
+   */
+  update(detections, timestamp) {
+    // Separate active paths (candidates for matching) from inactive ones
+    const activePaths = this.paths.filter(p => p.active);
+
+    // Track which active paths got a match this frame
+    const matched = new Set();
+
+    for (const det of detections) {
+      let bestPath = null;
+      let bestDist = MAX_MATCH_DISTANCE;
+
+      for (const path of activePaths) {
+        if (matched.has(path)) continue;
+        const last = path.points[path.points.length - 1];
+        const d = dist(det.cx, det.cy, last.x, last.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestPath = path;
+        }
+      }
+
+      if (bestPath) {
+        bestPath.points.push({ x: det.cx, y: det.cy, t: timestamp });
+        bestPath.framesSinceUpdate = 0;
+        matched.add(bestPath);
+      } else {
+        // New ball — start a fresh path
+        this.paths.push({
+          points: [{ x: det.cx, y: det.cy, t: timestamp }],
+          color: nextColor(),
+          active: true,
+          framesSinceUpdate: 0,
+        });
+      }
+    }
+
+    // Age unmatched active paths
+    for (const path of activePaths) {
+      if (!matched.has(path)) {
+        path.framesSinceUpdate++;
+        if (path.framesSinceUpdate >= INACTIVE_AFTER_FRAMES) {
+          path.active = false;
+        }
+      }
+    }
+  }
+
+  /** Clear all paths and reset color cycling. */
+  reset() {
+    this.paths = [];
+    colorIndex = 0;
+  }
+
+  /** Returns paths that have enough points to render. */
+  get drawablePaths() {
+    return this.paths.filter(p => p.points.length >= MIN_POINTS_TO_DRAW);
+  }
+
+  /** Returns the most recent point of each currently active path. */
+  get activeDetectionPoints() {
+    return this.paths
+      .filter(p => p.active && p.points.length > 0)
+      .map(p => ({ ...p.points[p.points.length - 1], color: p.color }));
+  }
+
+  get activeBallCount() {
+    return this.paths.filter(p => p.active).length;
+  }
+
+  get totalPathCount() {
+    return this.paths.length;
+  }
+}
