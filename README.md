@@ -102,10 +102,7 @@ python3 -m http.server 8080
 npx serve .
 ```
 
-To update the build version after a commit:
-
-```bash
-HASH=$(git rev-parse --short HEAD)
-sed -i "s/BUILD_COMMIT = '.*'/BUILD_COMMIT = '$HASH'/" js/version.js
-git add js/version.js && git commit -m "chore: update build version to $HASH"
-```
+The build version is stamped automatically by the GitHub Actions deployment
+workflow (`.github/workflows/deploy.yml`) using `GITHUB_SHA`. The value in
+`js/version.js` in source is always `'unknown'`; the correct hash is injected
+at deploy time before the Pages artifact is uploaded.

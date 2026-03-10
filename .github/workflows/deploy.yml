@@ -1,0 +1,40 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+
+# Allow one concurrent deployment; cancel any in-progress run for the same branch
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp build commit
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          sed -i "s/BUILD_COMMIT = '.*'/BUILD_COMMIT = '$SHORT_SHA'/" js/version.js
+          echo "Stamped BUILD_COMMIT = $SHORT_SHA"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
