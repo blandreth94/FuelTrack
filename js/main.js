@@ -35,6 +35,7 @@ const tracker  = new BallTracker();
 let tracking        = false;
 let rafId           = null;
 let detectionScale  = 0.25; // canvas drawn at this fraction of video resolution
+let baseMinArea     = 80;   // min blob area at 100% scale; auto-scaled for detectionScale
 let recordArmed     = false;
 let mediaRecorder   = null;
 let recordChunks    = [];
@@ -54,6 +55,16 @@ const compositeCtx    = compositeCanvas.getContext('2d');
 
 // Use step=1 — the canvas is already downscaled, no need for additional sampling skip
 detector.step = 1;
+
+/**
+ * Keep detector.minArea consistent with the current detectionScale.
+ * A ball occupies detectionScale² as many pixels in the downsampled frame,
+ * so the effective threshold must scale the same way.
+ */
+function syncMinArea() {
+  detector.minArea = Math.max(1, Math.round(baseMinArea * detectionScale * detectionScale));
+}
+syncMinArea();
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 
@@ -180,6 +191,7 @@ document.getElementById('seg-scale').addEventListener('click', e => {
   document.querySelectorAll('#seg-scale .seg-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   detectionScale = parseFloat(btn.dataset.value);
+  syncMinArea();
 });
 
 // HSL thresholds
@@ -198,7 +210,7 @@ bindSlider('s-hue-max',  'val-hue-max',  v => `${Math.round(v)}°`,  v => { dete
 bindSlider('s-sat-min',  'val-sat-min',  v => `${Math.round(v)}%`,  v => { detector.satMin = v / 100; });
 bindSlider('s-lit-min',  'val-lit-min',  v => `${Math.round(v)}%`,  v => { detector.litMin = v / 100; });
 bindSlider('s-lit-max',  'val-lit-max',  v => `${Math.round(v)}%`,  v => { detector.litMax = v / 100; });
-bindSlider('s-area',     'val-area',     v => `${Math.round(v)}`,   v => { detector.minArea = v; });
+bindSlider('s-area',     'val-area',     v => `${Math.round(v)}`,   v => { baseMinArea = v; syncMinArea(); });
 bindSlider('s-timeout',  'val-timeout',  v => `${Math.round(v)}ms`, v => { tracker.inactiveAfterMs = v; });
 
 // Reset all settings to their default values and sync slider/segmented-control UI
@@ -213,9 +225,10 @@ function applyDefaults() {
   detector.satMin         = DEFAULTS.satMin;
   detector.litMin         = DEFAULTS.litMin;
   detector.litMax         = DEFAULTS.litMax;
-  detector.minArea        = DEFAULTS.minArea;
+  baseMinArea             = DEFAULTS.minArea;
   tracker.inactiveAfterMs = DEFAULTS.inactiveAfterMs;
   detectionScale          = DEFAULTS.detectionScale;
+  syncMinArea();
 
   // Sync slider values and labels
   const setSlider = (id, valId, raw, fmt) => {
