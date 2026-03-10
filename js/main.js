@@ -18,6 +18,8 @@ const statusText     = document.getElementById('status-text');
 const fpsText        = document.getElementById('fps-text');
 const cameraSelect   = document.getElementById('camera-select');
 const cameraRow      = document.getElementById('camera-row');
+const zoomSlider     = document.getElementById('zoom-slider');
+const zoomValue      = document.getElementById('zoom-value');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
@@ -77,7 +79,15 @@ async function startCamera(deviceId) {
 async function populateCameraList(activeDeviceId) {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const cameras = devices.filter(d => d.kind === 'videoinput');
+    // Deduplicate: keep one entry per physical camera (same groupId = same device)
+    const seen = new Set();
+    const cameras = devices.filter(d => {
+      if (d.kind !== 'videoinput') return false;
+      const key = d.groupId || d.deviceId;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
     if (cameras.length <= 1) {
       cameraRow.classList.add('hidden');
@@ -99,7 +109,29 @@ async function populateCameraList(activeDeviceId) {
 }
 
 cameraSelect.addEventListener('change', () => {
+  // Reset tracking state and arcs when switching cameras
+  if (tracking) {
+    tracking = false;
+    btnTrack.textContent = 'Start Tracking';
+    btnTrack.classList.remove('tracking');
+  }
+  tracker.reset();
+  zoomSlider.value = 1;
+  applyZoom(1);
   startCamera(cameraSelect.value);
+});
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+
+function applyZoom(z) {
+  const t = `scale(${z})`;
+  video.style.transform  = t;
+  canvas.style.transform = t;
+  zoomValue.textContent  = `${z.toFixed(2).replace(/\.?0+$/, '')}×`;
+}
+
+zoomSlider.addEventListener('input', () => {
+  applyZoom(parseFloat(zoomSlider.value));
 });
 
 // ── Detection / Render Loop ───────────────────────────────────────────────────
