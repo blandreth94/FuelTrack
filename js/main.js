@@ -24,8 +24,6 @@ const iconCompress   = document.getElementById('icon-compress');
 const btnSettings    = document.getElementById('btn-settings');
 const settingsPanel  = document.getElementById('settings-panel');
 const btnSettingsClose = document.getElementById('btn-settings-close');
-const btnSettings    = document.getElementById('btn-settings');
-const settingsPanel  = document.getElementById('settings-panel');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
@@ -75,7 +73,8 @@ async function startCamera(deviceId) {
     btnTrack.disabled = false;
 
     // Populate the camera selector after we have permission (first call only)
-    await populateCameraList(stream.getVideoTracks()[0].getSettings().deviceId);
+    const activeDeviceId = stream.getVideoTracks()[0]?.getSettings()?.deviceId ?? '';
+    await populateCameraList(activeDeviceId);
   } catch (err) {
     showError(err);
   }
@@ -85,13 +84,13 @@ async function startCamera(deviceId) {
 async function populateCameraList(activeDeviceId) {
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    // Deduplicate: keep one entry per physical camera (same groupId = same device)
+    // Deduplicate by deviceId only — groupId is unreliable on iOS Chrome
+    // (all cameras may share the same groupId, causing valid entries to be dropped)
     const seen = new Set();
     const cameras = devices.filter(d => {
-      if (d.kind !== 'videoinput') return false;
-      const key = d.groupId || d.deviceId;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      if (d.kind !== 'videoinput' || !d.deviceId) return false;
+      if (seen.has(d.deviceId)) return false;
+      seen.add(d.deviceId);
       return true;
     });
 
