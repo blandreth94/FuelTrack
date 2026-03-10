@@ -337,6 +337,11 @@ html, body {
   color: #000;
 }
 
+.settings-row:has(> .btn) {
+  padding: 16px 20px;
+  border-bottom: none;
+}
+
 #error-overlay {
   position: fixed;
   inset: 0;

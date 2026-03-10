@@ -21,9 +21,10 @@ const cameraRow      = document.getElementById('camera-row');
 const btnFullscreen  = document.getElementById('btn-fullscreen');
 const iconExpand     = document.getElementById('icon-expand');
 const iconCompress   = document.getElementById('icon-compress');
-const btnSettings    = document.getElementById('btn-settings');
-const settingsPanel  = document.getElementById('settings-panel');
+const btnSettings      = document.getElementById('btn-settings');
+const settingsPanel    = document.getElementById('settings-panel');
 const btnSettingsClose = document.getElementById('btn-settings-close');
+const btnSave          = document.getElementById('btn-save');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
@@ -189,6 +190,107 @@ bindSlider('s-lit-min',  'val-lit-min',  v => `${Math.round(v)}%`,  v => { detec
 bindSlider('s-lit-max',  'val-lit-max',  v => `${Math.round(v)}%`,  v => { detector.litMax = v / 100; });
 bindSlider('s-area',     'val-area',     v => `${Math.round(v)}`,   v => { detector.minArea = v; });
 bindSlider('s-timeout',  'val-timeout',  v => `${Math.round(v)}ms`, v => { tracker.inactiveAfterMs = v; });
+
+// Reset all settings to their default values and sync slider/segmented-control UI
+const DEFAULTS = {
+  hueMin: 42, hueMax: 68, satMin: 0.55, litMin: 0.40, litMax: 0.85,
+  minArea: 80, detectionScale: 0.25, inactiveAfterMs: 500,
+};
+
+function applyDefaults() {
+  detector.hueMin         = DEFAULTS.hueMin;
+  detector.hueMax         = DEFAULTS.hueMax;
+  detector.satMin         = DEFAULTS.satMin;
+  detector.litMin         = DEFAULTS.litMin;
+  detector.litMax         = DEFAULTS.litMax;
+  detector.minArea        = DEFAULTS.minArea;
+  tracker.inactiveAfterMs = DEFAULTS.inactiveAfterMs;
+  detectionScale          = DEFAULTS.detectionScale;
+
+  // Sync slider values and labels
+  const setSlider = (id, valId, raw, fmt) => {
+    document.getElementById(id).value   = raw;
+    document.getElementById(valId).textContent = fmt;
+  };
+  setSlider('s-hue-min', 'val-hue-min', DEFAULTS.hueMin,               `${DEFAULTS.hueMin}°`);
+  setSlider('s-hue-max', 'val-hue-max', DEFAULTS.hueMax,               `${DEFAULTS.hueMax}°`);
+  setSlider('s-sat-min', 'val-sat-min', DEFAULTS.satMin * 100,         `${Math.round(DEFAULTS.satMin * 100)}%`);
+  setSlider('s-lit-min', 'val-lit-min', DEFAULTS.litMin * 100,         `${Math.round(DEFAULTS.litMin * 100)}%`);
+  setSlider('s-lit-max', 'val-lit-max', DEFAULTS.litMax * 100,         `${Math.round(DEFAULTS.litMax * 100)}%`);
+  setSlider('s-area',    'val-area',    DEFAULTS.minArea,               `${DEFAULTS.minArea}`);
+  setSlider('s-timeout', 'val-timeout', DEFAULTS.inactiveAfterMs,       `${DEFAULTS.inactiveAfterMs}ms`);
+
+  // Sync segmented control
+  document.querySelectorAll('#seg-scale .seg-btn').forEach(b => {
+    b.classList.toggle('active', parseFloat(b.dataset.value) === DEFAULTS.detectionScale);
+  });
+}
+
+document.getElementById('btn-reset-defaults').addEventListener('click', applyDefaults);
+
+// ── Snapshot / Recording ──────────────────────────────────────────────────────
+
+/**
+ * Build a composite canvas that merges the live video frame with the arc
+ * overlay, using the same object-fit:cover crop the user sees on screen.
+ *
+ * Designed for dual use:
+ *   - Still snapshot: call .toBlob() on the returned canvas
+ *   - Future screen recording: call .captureStream(fps) → MediaRecorder
+ */
+function buildCompositeCanvas() {
+  const cw = canvas.width;  // overlay canvas is sized to the display
+  const ch = canvas.height;
+
+  const composite = document.createElement('canvas');
+  composite.width  = cw;
+  composite.height = ch;
+  const ctx = composite.getContext('2d');
+
+  // Draw video with object-fit:cover geometry (same as videoToCanvas in renderer)
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  if (vw && vh) {
+    const scale   = Math.max(cw / vw, ch / vh);
+    const ox      = (cw - vw * scale) / 2;
+    const oy      = (ch - vh * scale) / 2;
+    ctx.drawImage(video, ox, oy, vw * scale, vh * scale);
+  }
+
+  // Draw arc overlay on top
+  ctx.drawImage(canvas, 0, 0);
+
+  return composite;
+}
+
+async function saveSnapshot() {
+  const composite = buildCompositeCanvas();
+
+  composite.toBlob(async blob => {
+    const filename = `fueltrack-${Date.now()}.jpg`;
+    const file = new File([blob], filename, { type: 'image/jpeg' });
+
+    // Web Share API — works on iOS Safari/Chrome and saves directly to Photos
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'FuelTrack Snapshot' });
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return; // user cancelled share sheet
+      }
+    }
+
+    // Fallback: trigger browser download (desktop)
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/jpeg', 0.92);
+}
+
+btnSave.addEventListener('click', saveSnapshot);
 
 // ── Detection / Render Loop ───────────────────────────────────────────────────
 
