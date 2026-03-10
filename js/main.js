@@ -177,10 +177,12 @@ function updateStatus() {
 btnTrack.addEventListener('click', () => {
   tracking = !tracking;
   if (tracking) {
+    video.play();
     btnTrack.textContent = 'Stop Tracking';
     btnTrack.classList.add('tracking');
     statusText.textContent = 'Tracking — no balls detected';
   } else {
+    video.pause(); // freeze the last frame for review
     btnTrack.textContent = 'Start Tracking';
     btnTrack.classList.remove('tracking');
     updateStatus();
