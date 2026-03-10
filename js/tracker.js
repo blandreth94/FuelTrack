@@ -92,11 +92,13 @@ export class BallTracker {
 
       if (bestPath) {
         const last = bestPath.points[bestPath.points.length - 1];
-        // Only record a new point if the ball actually moved
+        // Only record a new point (and keep the path alive) if the ball actually moved.
+        // If it hasn't moved, we don't update lastSeenAt — the path will time out via
+        // inactiveAfterMs, preventing stationary objects from being tracked indefinitely.
         if (dist(det.cx, det.cy, last.x, last.y) >= MIN_MOVE_PX) {
           bestPath.points.push({ x: det.cx, y: det.cy, t: timestamp });
+          bestPath.lastSeenAt = timestamp;
         }
-        bestPath.lastSeenAt = timestamp;
         matched.add(bestPath);
       } else {
         // New ball — start a fresh path
