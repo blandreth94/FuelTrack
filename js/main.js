@@ -18,8 +18,9 @@ const statusText     = document.getElementById('status-text');
 const fpsText        = document.getElementById('fps-text');
 const cameraSelect   = document.getElementById('camera-select');
 const cameraRow      = document.getElementById('camera-row');
-const zoomSlider     = document.getElementById('zoom-slider');
-const zoomValue      = document.getElementById('zoom-value');
+const btnFullscreen  = document.getElementById('btn-fullscreen');
+const iconExpand     = document.getElementById('icon-expand');
+const iconCompress   = document.getElementById('icon-compress');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
@@ -27,18 +28,14 @@ const tracker  = new BallTracker();
 
 let tracking    = false;
 let rafId       = null;
-let lastFrameTs = 0;
 
-// Rolling FPS — keep timestamps of the last 30 processed frames
-const FPS_WINDOW = 30;
+// Rolling FPS — keep timestamps of the last 60 processed frames
+const FPS_WINDOW = 60;
 const frameTimes = [];
 
 /** Offscreen canvas used to read pixel data from the video stream. */
 const offscreen    = document.createElement('canvas');
 const offscreenCtx = offscreen.getContext('2d', { willReadFrequently: true });
-
-// Throttle to ~30 fps to preserve battery / thermal headroom on iPhone.
-const TARGET_INTERVAL_MS = 1000 / 30;
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 
@@ -116,32 +113,31 @@ cameraSelect.addEventListener('change', () => {
     btnTrack.classList.remove('tracking');
   }
   tracker.reset();
-  zoomSlider.value = 1;
-  applyZoom(1);
   startCamera(cameraSelect.value);
 });
 
-// ── Zoom ──────────────────────────────────────────────────────────────────────
+// ── Fullscreen ────────────────────────────────────────────────────────────────
 
-function applyZoom(z) {
-  const t = `scale(${z})`;
-  video.style.transform  = t;
-  canvas.style.transform = t;
-  zoomValue.textContent  = `${z.toFixed(2).replace(/\.?0+$/, '')}×`;
+function updateFullscreenIcon() {
+  const fs = !!document.fullscreenElement;
+  iconExpand.style.display   = fs ? 'none' : '';
+  iconCompress.style.display = fs ? '' : 'none';
 }
 
-zoomSlider.addEventListener('input', () => {
-  applyZoom(parseFloat(zoomSlider.value));
+btnFullscreen.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
 });
+
+document.addEventListener('fullscreenchange', updateFullscreenIcon);
 
 // ── Detection / Render Loop ───────────────────────────────────────────────────
 
 function loop(ts) {
   rafId = requestAnimationFrame(loop);
-
-  const elapsed = ts - lastFrameTs;
-  if (elapsed < TARGET_INTERVAL_MS) return; // throttle
-  lastFrameTs = ts - (elapsed % TARGET_INTERVAL_MS);
 
   // Update rolling FPS
   frameTimes.push(ts);

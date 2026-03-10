@@ -130,64 +130,16 @@ html, body {
   display: none;
 }
 
-#zoom-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-#zoom-label {
-  color: rgba(255,255,255,0.7);
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-#zoom-slider {
-  flex: 1;
-  -webkit-appearance: none;
-  appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255,255,255,0.25);
-  outline: none;
-  cursor: pointer;
-}
-
-#zoom-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #fff;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-
-#zoom-slider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: #fff;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-}
-
-#zoom-value {
-  color: rgba(255,255,255,0.7);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  min-width: 28px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
 #button-row {
   display: flex;
   gap: 12px;
+}
+
+.btn-icon {
+  flex: 0 0 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn {
