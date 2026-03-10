@@ -8,6 +8,7 @@
 import { createDetector } from './detector.js';
 import { BallTracker } from './tracker.js';
 import { render } from './renderer.js';
+import { BUILD_COMMIT } from './version.js';
 
 // ── DOM References ────────────────────────────────────────────────────────────
 const video          = document.getElementById('video');
@@ -236,6 +237,8 @@ function applyDefaults() {
 }
 
 document.getElementById('btn-reset-defaults').addEventListener('click', applyDefaults);
+
+document.getElementById('settings-version').textContent = `build ${BUILD_COMMIT}`;
 
 // ── Snapshot / Recording ──────────────────────────────────────────────────────
 
