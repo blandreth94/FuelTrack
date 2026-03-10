@@ -25,6 +25,7 @@ const btnSettings      = document.getElementById('btn-settings');
 const settingsPanel    = document.getElementById('settings-panel');
 const btnSettingsClose = document.getElementById('btn-settings-close');
 const btnSave          = document.getElementById('btn-save');
+const btnRecord        = document.getElementById('btn-record');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
@@ -33,6 +34,10 @@ const tracker  = new BallTracker();
 let tracking        = false;
 let rafId           = null;
 let detectionScale  = 0.25; // canvas drawn at this fraction of video resolution
+let recordArmed     = false;
+let mediaRecorder   = null;
+let recordChunks    = [];
+let recordMime      = '';
 
 // Rolling FPS — keep timestamps of the last 60 processed frames
 const FPS_WINDOW = 60;
@@ -41,6 +46,10 @@ const frameTimes = [];
 /** Offscreen canvas used to read pixel data from the video stream (downscaled). */
 const offscreen    = document.createElement('canvas');
 const offscreenCtx = offscreen.getContext('2d', { willReadFrequently: true });
+
+/** Persistent composite canvas used for recording and snapshots. */
+const compositeCanvas = document.createElement('canvas');
+const compositeCtx    = compositeCanvas.getContext('2d');
 
 // Use step=1 — the canvas is already downscaled, no need for additional sampling skip
 detector.step = 1;
@@ -231,42 +240,36 @@ document.getElementById('btn-reset-defaults').addEventListener('click', applyDef
 // ── Snapshot / Recording ──────────────────────────────────────────────────────
 
 /**
- * Build a composite canvas that merges the live video frame with the arc
- * overlay, using the same object-fit:cover crop the user sees on screen.
- *
- * Designed for dual use:
- *   - Still snapshot: call .toBlob() on the returned canvas
- *   - Future screen recording: call .captureStream(fps) → MediaRecorder
+ * Draw the current video frame + arc overlay into the persistent compositeCanvas,
+ * using the same object-fit:cover crop the user sees on screen.
  */
-function buildCompositeCanvas() {
-  const cw = canvas.width;  // overlay canvas is sized to the display
+function updateCompositeCanvas() {
+  const cw = canvas.width;
   const ch = canvas.height;
 
-  const composite = document.createElement('canvas');
-  composite.width  = cw;
-  composite.height = ch;
-  const ctx = composite.getContext('2d');
+  if (compositeCanvas.width !== cw || compositeCanvas.height !== ch) {
+    compositeCanvas.width  = cw;
+    compositeCanvas.height = ch;
+  }
 
-  // Draw video with object-fit:cover geometry (same as videoToCanvas in renderer)
+  // Draw video with object-fit:cover geometry
   const vw = video.videoWidth;
   const vh = video.videoHeight;
   if (vw && vh) {
-    const scale   = Math.max(cw / vw, ch / vh);
-    const ox      = (cw - vw * scale) / 2;
-    const oy      = (ch - vh * scale) / 2;
-    ctx.drawImage(video, ox, oy, vw * scale, vh * scale);
+    const scale = Math.max(cw / vw, ch / vh);
+    const ox    = (cw - vw * scale) / 2;
+    const oy    = (ch - vh * scale) / 2;
+    compositeCtx.drawImage(video, ox, oy, vw * scale, vh * scale);
   }
 
   // Draw arc overlay on top
-  ctx.drawImage(canvas, 0, 0);
-
-  return composite;
+  compositeCtx.drawImage(canvas, 0, 0);
 }
 
 async function saveSnapshot() {
-  const composite = buildCompositeCanvas();
+  updateCompositeCanvas();
 
-  composite.toBlob(async blob => {
+  compositeCanvas.toBlob(async blob => {
     const filename = `fueltrack-${Date.now()}.jpg`;
     const file = new File([blob], filename, { type: 'image/jpeg' });
 
@@ -291,6 +294,72 @@ async function saveSnapshot() {
 }
 
 btnSave.addEventListener('click', saveSnapshot);
+
+// ── Video Recording ───────────────────────────────────────────────────────────
+
+function pickMimeType() {
+  const candidates = [
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+    'video/mp4',
+  ];
+  return candidates.find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+}
+
+function startRecording() {
+  if (!compositeCanvas.captureStream) return;
+  recordChunks = [];
+  recordMime   = pickMimeType();
+  const stream = compositeCanvas.captureStream(30);
+  mediaRecorder = new MediaRecorder(stream, recordMime ? { mimeType: recordMime } : {});
+  mediaRecorder.addEventListener('dataavailable', e => {
+    if (e.data.size > 0) recordChunks.push(e.data);
+  });
+  mediaRecorder.addEventListener('stop', saveRecording);
+  mediaRecorder.start();
+  btnRecord.classList.add('recording-active');
+}
+
+function stopRecording() {
+  if (mediaRecorder?.state === 'recording') mediaRecorder.stop();
+  btnRecord.classList.remove('recording-active');
+  mediaRecorder = null;
+}
+
+async function saveRecording() {
+  if (!recordChunks.length) return;
+  const ext  = recordMime.includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(recordChunks, { type: recordMime || 'video/webm' });
+  const filename = `fueltrack-${Date.now()}.${ext}`;
+  const file = new File([blob], filename, { type: blob.type });
+
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'FuelTrack Recording' });
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Hide the record button on browsers that don't support captureStream
+if (!HTMLCanvasElement.prototype.captureStream) {
+  btnRecord.style.display = 'none';
+}
+
+btnRecord.addEventListener('click', () => {
+  recordArmed = !recordArmed;
+  btnRecord.classList.toggle('record-armed', recordArmed);
+});
 
 // ── Detection / Render Loop ───────────────────────────────────────────────────
 
@@ -343,6 +412,8 @@ function loop(ts) {
     vw,
     vh,
   );
+
+  if (mediaRecorder?.state === 'recording') updateCompositeCanvas();
 }
 
 function startLoop() {
@@ -376,10 +447,12 @@ btnTrack.addEventListener('click', () => {
     btnTrack.textContent = 'Stop Tracking';
     btnTrack.classList.add('tracking');
     statusText.textContent = 'Tracking — no balls detected';
+    if (recordArmed) startRecording();
   } else {
     video.pause(); // freeze the last frame for review
     btnTrack.textContent = 'Start Tracking';
     btnTrack.classList.remove('tracking');
+    if (mediaRecorder) stopRecording();
     updateStatus();
   }
 });
