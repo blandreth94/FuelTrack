@@ -28,14 +28,14 @@ const INACTIVE_AFTER_FRAMES = 20;
  * before a new point is appended. Prevents static false-positives from
  * accumulating hundreds of duplicate points at the same location.
  */
-const MIN_MOVE_PX = 12;
+const MIN_MOVE_PX = 6;
 
 /**
  * A path must span at least this many pixels (max distance between any point
  * and the first point) before it is considered drawable as an arc.
  * Filters out noise blobs that are detected but never actually travel.
  */
-const MIN_ARC_SPAN_PX = 45;
+const MIN_ARC_SPAN_PX = 15;
 
 let colorIndex = 0;
 function nextColor() {

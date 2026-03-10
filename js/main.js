@@ -15,6 +15,7 @@ const canvas         = document.getElementById('overlay');
 const btnTrack       = document.getElementById('btn-track');
 const btnReset       = document.getElementById('btn-reset');
 const statusText     = document.getElementById('status-text');
+const fpsText        = document.getElementById('fps-text');
 const cameraSelect   = document.getElementById('camera-select');
 const cameraRow      = document.getElementById('camera-row');
 
@@ -25,6 +26,10 @@ const tracker  = new BallTracker();
 let tracking    = false;
 let rafId       = null;
 let lastFrameTs = 0;
+
+// Rolling FPS — keep timestamps of the last 30 processed frames
+const FPS_WINDOW = 30;
+const frameTimes = [];
 
 /** Offscreen canvas used to read pixel data from the video stream. */
 const offscreen    = document.createElement('canvas');
@@ -105,6 +110,14 @@ function loop(ts) {
   const elapsed = ts - lastFrameTs;
   if (elapsed < TARGET_INTERVAL_MS) return; // throttle
   lastFrameTs = ts - (elapsed % TARGET_INTERVAL_MS);
+
+  // Update rolling FPS
+  frameTimes.push(ts);
+  if (frameTimes.length > FPS_WINDOW) frameTimes.shift();
+  if (frameTimes.length >= 2) {
+    const fps = (frameTimes.length - 1) / ((ts - frameTimes[0]) / 1000);
+    fpsText.textContent = `${Math.round(fps)} fps`;
+  }
 
   const vw = video.videoWidth;
   const vh = video.videoHeight;
