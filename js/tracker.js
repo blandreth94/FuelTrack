@@ -20,8 +20,8 @@ const ARC_COLORS = [
 /** Max pixel distance to match a detection to an existing active path. */
 const MAX_MATCH_DISTANCE = 160;
 
-/** Frames without a detection before a path is marked inactive. */
-const INACTIVE_AFTER_FRAMES = 20;
+/** ms without a detection before a path is marked inactive (frame-rate independent). */
+const DEFAULT_INACTIVE_AFTER_MS = 500;
 
 /**
  * A detection must move at least this many pixels from the last recorded point
@@ -59,6 +59,8 @@ export class BallTracker {
   constructor() {
     /** @type {Path[]} */
     this.paths = [];
+    /** Milliseconds without a detection before a path goes inactive. */
+    this.inactiveAfterMs = DEFAULT_INACTIVE_AFTER_MS;
   }
 
   /**
@@ -94,7 +96,7 @@ export class BallTracker {
         if (dist(det.cx, det.cy, last.x, last.y) >= MIN_MOVE_PX) {
           bestPath.points.push({ x: det.cx, y: det.cy, t: timestamp });
         }
-        bestPath.framesSinceUpdate = 0;
+        bestPath.lastSeenAt = timestamp;
         matched.add(bestPath);
       } else {
         // New ball — start a fresh path
@@ -102,18 +104,15 @@ export class BallTracker {
           points: [{ x: det.cx, y: det.cy, t: timestamp }],
           color: nextColor(),
           active: true,
-          framesSinceUpdate: 0,
+          lastSeenAt: timestamp,
         });
       }
     }
 
-    // Age unmatched active paths
+    // Age unmatched active paths by time (frame-rate independent)
     for (const path of activePaths) {
-      if (!matched.has(path)) {
-        path.framesSinceUpdate++;
-        if (path.framesSinceUpdate >= INACTIVE_AFTER_FRAMES) {
-          path.active = false;
-        }
+      if (!matched.has(path) && timestamp - path.lastSeenAt > this.inactiveAfterMs) {
+        path.active = false;
       }
     }
   }

@@ -21,21 +21,30 @@ const cameraRow      = document.getElementById('camera-row');
 const btnFullscreen  = document.getElementById('btn-fullscreen');
 const iconExpand     = document.getElementById('icon-expand');
 const iconCompress   = document.getElementById('icon-compress');
+const btnSettings    = document.getElementById('btn-settings');
+const settingsPanel  = document.getElementById('settings-panel');
+const btnSettingsClose = document.getElementById('btn-settings-close');
+const btnSettings    = document.getElementById('btn-settings');
+const settingsPanel  = document.getElementById('settings-panel');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
 const tracker  = new BallTracker();
 
-let tracking    = false;
-let rafId       = null;
+let tracking        = false;
+let rafId           = null;
+let detectionScale  = 0.25; // canvas drawn at this fraction of video resolution
 
 // Rolling FPS — keep timestamps of the last 60 processed frames
 const FPS_WINDOW = 60;
 const frameTimes = [];
 
-/** Offscreen canvas used to read pixel data from the video stream. */
+/** Offscreen canvas used to read pixel data from the video stream (downscaled). */
 const offscreen    = document.createElement('canvas');
 const offscreenCtx = offscreen.getContext('2d', { willReadFrequently: true });
+
+// Use step=1 — the canvas is already downscaled, no need for additional sampling skip
+detector.step = 1;
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +127,12 @@ cameraSelect.addEventListener('change', () => {
 
 // ── Fullscreen ────────────────────────────────────────────────────────────────
 
+// iOS (Chrome + Safari) does not support the Fullscreen API — hide the button
+const supportsFullscreen = !!document.documentElement.requestFullscreen;
+if (!supportsFullscreen) {
+  btnFullscreen.style.display = 'none';
+}
+
 function updateFullscreenIcon() {
   const fs = !!document.fullscreenElement;
   iconExpand.style.display   = fs ? 'none' : '';
@@ -133,6 +148,48 @@ btnFullscreen.addEventListener('click', () => {
 });
 
 document.addEventListener('fullscreenchange', updateFullscreenIcon);
+
+// ── Settings Panel ────────────────────────────────────────────────────────────
+
+function openSettings() {
+  settingsPanel.classList.add('open');
+  settingsPanel.setAttribute('aria-hidden', 'false');
+}
+function closeSettings() {
+  settingsPanel.classList.remove('open');
+  settingsPanel.setAttribute('aria-hidden', 'true');
+}
+
+btnSettings.addEventListener('click', openSettings);
+btnSettingsClose.addEventListener('click', closeSettings);
+
+// Detection resolution (segmented control)
+document.getElementById('seg-scale').addEventListener('click', e => {
+  const btn = e.target.closest('.seg-btn');
+  if (!btn) return;
+  document.querySelectorAll('#seg-scale .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  detectionScale = parseFloat(btn.dataset.value);
+});
+
+// HSL thresholds
+function bindSlider(id, valId, transform, apply) {
+  const slider = document.getElementById(id);
+  const valEl  = document.getElementById(valId);
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    valEl.textContent = transform(v);
+    apply(v);
+  });
+}
+
+bindSlider('s-hue-min',  'val-hue-min',  v => `${Math.round(v)}°`,  v => { detector.hueMin = v; });
+bindSlider('s-hue-max',  'val-hue-max',  v => `${Math.round(v)}°`,  v => { detector.hueMax = v; });
+bindSlider('s-sat-min',  'val-sat-min',  v => `${Math.round(v)}%`,  v => { detector.satMin = v / 100; });
+bindSlider('s-lit-min',  'val-lit-min',  v => `${Math.round(v)}%`,  v => { detector.litMin = v / 100; });
+bindSlider('s-lit-max',  'val-lit-max',  v => `${Math.round(v)}%`,  v => { detector.litMax = v / 100; });
+bindSlider('s-area',     'val-area',     v => `${Math.round(v)}`,   v => { detector.minArea = v; });
+bindSlider('s-timeout',  'val-timeout',  v => `${Math.round(v)}ms`, v => { tracker.inactiveAfterMs = v; });
 
 // ── Detection / Render Loop ───────────────────────────────────────────────────
 
@@ -152,18 +209,27 @@ function loop(ts) {
 
   if (!vw || !vh) return; // video not ready yet
 
-  // Resize offscreen canvas to match the video stream (not the display)
-  if (offscreen.width !== vw || offscreen.height !== vh) {
-    offscreen.width  = vw;
-    offscreen.height = vh;
+  // Draw to a downscaled canvas for faster pixel processing
+  const dw = Math.max(1, Math.round(vw * detectionScale));
+  const dh = Math.max(1, Math.round(vh * detectionScale));
+  if (offscreen.width !== dw || offscreen.height !== dh) {
+    offscreen.width  = dw;
+    offscreen.height = dh;
   }
 
   let detections = [];
 
   if (tracking) {
-    offscreenCtx.drawImage(video, 0, 0, vw, vh);
-    const imageData = offscreenCtx.getImageData(0, 0, vw, vh);
-    detections = detector.detect(imageData, vw, vh);
+    offscreenCtx.drawImage(video, 0, 0, dw, dh);
+    const imageData = offscreenCtx.getImageData(0, 0, dw, dh);
+    const raw = detector.detect(imageData, dw, dh);
+    // Scale detection coordinates back up to display space
+    detections = raw.map(d => ({
+      cx:     d.cx     / detectionScale,
+      cy:     d.cy     / detectionScale,
+      radius: d.radius / detectionScale,
+      area:   d.area,
+    }));
     tracker.update(detections, ts);
     updateStatus();
   }

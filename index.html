@@ -15,7 +15,9 @@
   </div>
 
   <div id="status-bar">
-    <span id="fps-spacer"></span>
+    <button id="btn-settings" aria-label="Settings">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
     <span id="status-text">Press Start to begin tracking</span>
     <span id="fps-text"></span>
   </div>
@@ -32,6 +34,57 @@
         <svg id="icon-expand" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
         <svg id="icon-compress" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settings-panel" aria-hidden="true">
+    <div id="settings-header">
+      <span>Settings</span>
+      <button id="btn-settings-close">Done</button>
+    </div>
+
+    <div class="settings-section-label">Detection</div>
+
+    <div class="settings-row">
+      <div class="settings-label">Resolution <span class="settings-hint">lower = faster</span></div>
+      <div class="seg-control" id="seg-scale">
+        <button class="seg-btn active" data-value="0.25">25%</button>
+        <button class="seg-btn" data-value="0.5">50%</button>
+        <button class="seg-btn" data-value="1">100%</button>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <div class="settings-label">Hue Min <span id="val-hue-min">42°</span></div>
+      <input type="range" id="s-hue-min" min="0" max="120" value="42" />
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">Hue Max <span id="val-hue-max">68°</span></div>
+      <input type="range" id="s-hue-max" min="0" max="120" value="68" />
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">Saturation Min <span id="val-sat-min">55%</span></div>
+      <input type="range" id="s-sat-min" min="0" max="100" value="55" />
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">Lightness Min <span id="val-lit-min">40%</span></div>
+      <input type="range" id="s-lit-min" min="0" max="100" value="40" />
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">Lightness Max <span id="val-lit-max">85%</span></div>
+      <input type="range" id="s-lit-max" min="0" max="100" value="85" />
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">Min Blob Area <span id="val-area">80</span></div>
+      <input type="range" id="s-area" min="1" max="400" value="80" />
+    </div>
+
+    <div class="settings-section-label">Tracking</div>
+
+    <div class="settings-row">
+      <div class="settings-label">Inactivity Timeout <span id="val-timeout">500ms</span></div>
+      <input type="range" id="s-timeout" min="50" max="2000" step="50" value="500" />
     </div>
   </div>
 
