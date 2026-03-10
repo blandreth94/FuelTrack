@@ -39,15 +39,19 @@ function rgbToHsl(r, g, b) {
  */
 export class ColorBallDetector {
   constructor() {
-    // HSL thresholds for yellow
-    this.hueMin = 35;
-    this.hueMax = 75;
-    this.satMin = 0.40;
-    this.litMin = 0.25;
-    this.litMax = 0.88;
+    // HSL thresholds for bright FRC yellow balls.
+    // Narrower than generic yellow to reject orange tape, warm wood grain, etc.
+    this.hueMin = 42;   // exclude orange-yellow
+    this.hueMax = 68;   // stay within true yellow
+    this.satMin = 0.55; // require vivid colour (filters washed-out wood/walls)
+    this.litMin = 0.40; // exclude dark shadows
+    this.litMax = 0.85;
 
-    // Minimum blob area (in downsampled pixels) to count as a ball
-    this.minArea = 30;
+    // Minimum blob area (in downsampled pixels) — balls are large, specks are not
+    this.minArea = 80;
+
+    // Maximum aspect ratio (w/h or h/w). Balls are roughly round; tape is elongated.
+    this.maxAspect = 3.5;
 
     // Pixel step for downsampling (2 = check every other pixel in each axis)
     this.step = 2;
@@ -152,11 +156,14 @@ export class ColorBallDetector {
     const results = [];
     for (const [, s] of stats) {
       if (s.count < this.minArea) continue;
+      const bw = (s.maxX - s.minX + 1);
+      const bh = (s.maxY - s.minY + 1);
+      // Reject elongated blobs (tape strips, wires, etc.)
+      const aspect = bw > bh ? bw / bh : bh / bw;
+      if (aspect > this.maxAspect) continue;
       const cx = (s.sumX / s.count) * step;
       const cy = (s.sumY / s.count) * step;
-      const w = (s.maxX - s.minX + 1) * step;
-      const h = (s.maxY - s.minY + 1) * step;
-      const radius = Math.max(w, h) / 2;
+      const radius = Math.max(bw, bh) * step / 2;
       results.push({ cx, cy, radius, area: s.count * step * step });
     }
 

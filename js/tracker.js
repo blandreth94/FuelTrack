@@ -23,8 +23,19 @@ const MAX_MATCH_DISTANCE = 160;
 /** Frames without a detection before a path is marked inactive. */
 const INACTIVE_AFTER_FRAMES = 20;
 
-/** Minimum number of points a path needs before it's drawn as an arc. */
-export const MIN_POINTS_TO_DRAW = 2;
+/**
+ * A detection must move at least this many pixels from the last recorded point
+ * before a new point is appended. Prevents static false-positives from
+ * accumulating hundreds of duplicate points at the same location.
+ */
+const MIN_MOVE_PX = 12;
+
+/**
+ * A path must span at least this many pixels (max distance between any point
+ * and the first point) before it is considered drawable as an arc.
+ * Filters out noise blobs that are detected but never actually travel.
+ */
+const MIN_ARC_SPAN_PX = 45;
 
 let colorIndex = 0;
 function nextColor() {
@@ -78,7 +89,11 @@ export class BallTracker {
       }
 
       if (bestPath) {
-        bestPath.points.push({ x: det.cx, y: det.cy, t: timestamp });
+        const last = bestPath.points[bestPath.points.length - 1];
+        // Only record a new point if the ball actually moved
+        if (dist(det.cx, det.cy, last.x, last.y) >= MIN_MOVE_PX) {
+          bestPath.points.push({ x: det.cx, y: det.cy, t: timestamp });
+        }
         bestPath.framesSinceUpdate = 0;
         matched.add(bestPath);
       } else {
@@ -109,9 +124,13 @@ export class BallTracker {
     colorIndex = 0;
   }
 
-  /** Returns paths that have enough points to render. */
+  /** Returns paths that have moved enough to be worth drawing as arcs. */
   get drawablePaths() {
-    return this.paths.filter(p => p.points.length >= MIN_POINTS_TO_DRAW);
+    return this.paths.filter(p => {
+      if (p.points.length < 2) return false;
+      const origin = p.points[0];
+      return p.points.some(pt => dist(pt.x, pt.y, origin.x, origin.y) >= MIN_ARC_SPAN_PX);
+    });
   }
 
   /** Returns the most recent point of each currently active path. */

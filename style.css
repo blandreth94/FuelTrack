@@ -58,12 +58,60 @@ html, body {
   left: 0;
   right: 0;
   display: flex;
-  gap: 12px;
-  padding: 16px 24px calc(16px + env(safe-area-inset-bottom, 0px));
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 24px calc(12px + env(safe-area-inset-bottom, 0px));
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 10;
+}
+
+#camera-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#camera-label {
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#camera-select {
+  flex: 1;
+  min-height: 34px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  padding: 4px 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  /* chevron icon */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23fff' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+#camera-select option {
+  background: #1c1c1e;
+  color: #fff;
+}
+
+#camera-row.hidden {
+  display: none;
+}
+
+#button-row {
+  display: flex;
+  gap: 12px;
 }
 
 .btn {

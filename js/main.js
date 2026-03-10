@@ -10,11 +10,13 @@ import { BallTracker } from './tracker.js';
 import { render } from './renderer.js';
 
 // ── DOM References ────────────────────────────────────────────────────────────
-const video      = document.getElementById('video');
-const canvas     = document.getElementById('overlay');
-const btnTrack   = document.getElementById('btn-track');
-const btnReset   = document.getElementById('btn-reset');
-const statusText = document.getElementById('status-text');
+const video          = document.getElementById('video');
+const canvas         = document.getElementById('overlay');
+const btnTrack       = document.getElementById('btn-track');
+const btnReset       = document.getElementById('btn-reset');
+const statusText     = document.getElementById('status-text');
+const cameraSelect   = document.getElementById('camera-select');
+const cameraRow      = document.getElementById('camera-row');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const detector = createDetector('color');
@@ -33,27 +35,67 @@ const TARGET_INTERVAL_MS = 1000 / 30;
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 
-async function startCamera() {
+/** Start (or restart) the camera stream for a given deviceId. */
+async function startCamera(deviceId) {
   statusText.textContent = 'Requesting camera…';
+
+  // Stop any existing stream first
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+
+  const constraints = {
+    video: deviceId
+      ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      : { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false,
+  };
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false,
-    });
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await new Promise(resolve => {
       video.addEventListener('loadedmetadata', resolve, { once: true });
     });
     statusText.textContent = 'Press Start to begin tracking';
     btnTrack.disabled = false;
+
+    // Populate the camera selector after we have permission (first call only)
+    await populateCameraList(stream.getVideoTracks()[0].getSettings().deviceId);
   } catch (err) {
     showError(err);
   }
 }
+
+/** Enumerate video input devices and fill the selector. */
+async function populateCameraList(activeDeviceId) {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+
+    if (cameras.length <= 1) {
+      cameraRow.classList.add('hidden');
+      return;
+    }
+
+    cameraSelect.innerHTML = '';
+    cameras.forEach((cam, i) => {
+      const opt = document.createElement('option');
+      opt.value = cam.deviceId;
+      opt.textContent = cam.label || `Camera ${i + 1}`;
+      if (cam.deviceId === activeDeviceId) opt.selected = true;
+      cameraSelect.appendChild(opt);
+    });
+    cameraRow.classList.remove('hidden');
+  } catch {
+    cameraRow.classList.add('hidden');
+  }
+}
+
+cameraSelect.addEventListener('change', () => {
+  startCamera(cameraSelect.value);
+});
 
 // ── Detection / Render Loop ───────────────────────────────────────────────────
 
@@ -163,6 +205,7 @@ function showError(err) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 btnTrack.disabled = true; // enabled after camera is ready
+cameraRow.classList.add('hidden'); // hidden until we know there are multiple cameras
 
 startCamera().then(() => {
   startLoop();
