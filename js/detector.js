@@ -60,12 +60,15 @@ export class ColorBallDetector {
   /**
    * Detect yellow ball blobs in a video frame.
    *
-   * @param {ImageData} imageData - Raw RGBA pixel data
-   * @param {number} width        - Frame width in pixels
-   * @param {number} height       - Frame height in pixels
+   * @param {ImageData} imageData       - Raw RGBA pixel data
+   * @param {number} width              - Frame width in pixels
+   * @param {number} height             - Frame height in pixels
+   * @param {Uint8Array|null} motionMask - Optional per-pixel motion mask (1 = moving).
+   *   Indexed as `py * width + px`. When provided, only pixels marked as moving
+   *   are colour-tested; stationary pixels are skipped entirely.
    * @returns {Array<{cx:number, cy:number, radius:number, area:number}>}
    */
-  detect(imageData, width, height) {
+  detect(imageData, width, height, motionMask = null) {
     const { step } = this;
     const data = imageData.data;
 
@@ -78,6 +81,8 @@ export class ColorBallDetector {
       for (let col = 0; col < cols; col++) {
         const px = col * step;
         const py = row * step;
+        // Skip stationary pixels when a motion mask is available
+        if (motionMask && !motionMask[py * width + px]) continue;
         const idx = (py * width + px) * 4;
         const r = data[idx];
         const g = data[idx + 1];
