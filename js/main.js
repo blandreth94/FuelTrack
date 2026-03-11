@@ -45,6 +45,14 @@ let recordMime      = '';
 const FPS_WINDOW = 60;
 const frameTimes = [];
 
+// ── Frame Differencing ────────────────────────────────────────────────────────
+// Per-channel diff threshold (0–255). A pixel is considered "moving" if any
+// R/G/B channel differs by more than this value from the previous frame.
+const MOTION_THRESHOLD = 25;
+
+/** RGBA pixel data from the previous detection frame, or null on first frame. */
+let prevFrameData = null;
+
 /** Offscreen canvas used to read pixel data from the video stream (downscaled). */
 const offscreen    = document.createElement('canvas');
 const offscreenCtx = offscreen.getContext('2d', { willReadFrequently: true });
@@ -408,7 +416,33 @@ function loop(ts) {
   if (tracking) {
     offscreenCtx.drawImage(video, 0, 0, dw, dh);
     const imageData = offscreenCtx.getImageData(0, 0, dw, dh);
-    const raw = detector.detect(imageData, dw, dh);
+    const curr = imageData.data; // Uint8ClampedArray, RGBA
+
+    // Build per-pixel motion mask by comparing to the previous frame.
+    // On the very first frame prevFrameData is null — no mask, full scan.
+    let motionMask = null;
+    const pixelCount = dw * dh;
+    if (prevFrameData && prevFrameData.length === curr.length) {
+      motionMask = new Uint8Array(pixelCount);
+      for (let i = 0; i < pixelCount; i++) {
+        const b = i * 4;
+        if (
+          Math.abs(curr[b]     - prevFrameData[b])     > MOTION_THRESHOLD ||
+          Math.abs(curr[b + 1] - prevFrameData[b + 1]) > MOTION_THRESHOLD ||
+          Math.abs(curr[b + 2] - prevFrameData[b + 2]) > MOTION_THRESHOLD
+        ) {
+          motionMask[i] = 1;
+        }
+      }
+    }
+
+    // Reuse the prevFrameData buffer (reallocate only when canvas size changes)
+    if (!prevFrameData || prevFrameData.length !== curr.length) {
+      prevFrameData = new Uint8Array(curr.length);
+    }
+    prevFrameData.set(curr);
+
+    const raw = detector.detect(imageData, dw, dh, motionMask);
     // Scale detection coordinates back up to display space
     detections = raw.map(d => ({
       cx:     d.cx     / detectionScale,
@@ -459,6 +493,7 @@ function updateStatus() {
 btnTrack.addEventListener('click', () => {
   tracking = !tracking;
   if (tracking) {
+    prevFrameData = null; // discard stale frame so first loop does a full scan
     video.play();
     btnTrack.textContent = 'Stop Tracking';
     btnTrack.classList.add('tracking');
